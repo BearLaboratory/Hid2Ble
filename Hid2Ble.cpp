@@ -8,16 +8,8 @@
 #include "sdkconfig.h"
 
 #include "BleConnectionStatus.h"
-#include "KeyboardOutputCallbacks.h"
 #include "Hid2Ble.h"
-
-#if defined(CONFIG_ARDUHAL_ESP_LOG)
-#include "esp32-hal-log.h"
-#define LOG_TAG ""
-#else
-#include "esp_log.h"
-static const char *LOG_TAG = "BLEDevice";
-#endif
+#include "BLECharacteristic.h"
 
 // Report IDs:
 #define KEYBOARD_ID 0x01
@@ -113,8 +105,12 @@ bool Hid2Ble::isConnected(void)
 void Hid2Ble::setBatteryLevel(uint8_t level)
 {
 	this->batteryLevel = level;
-	if (hid != 0)
-		this->hid->setBatteryLevel(this->batteryLevel);
+	this->hid->setBatteryLevel(this->batteryLevel);
+}
+
+void Hid2Ble::setCallBack(BLECharacteristicCallbacks *callBack)
+{
+	this->callBack = callBack;
 }
 
 void Hid2Ble::taskServer(void *pvParameter)
@@ -132,7 +128,7 @@ void Hid2Ble::taskServer(void *pvParameter)
 	bleKeyboardInstance->connectionStatus->outputKeyboard = bleKeyboardInstance->outputKeyboard;
 	bleKeyboardInstance->connectionStatus->inputMediaKeys = bleKeyboardInstance->inputMediaKeys;
 
-	bleKeyboardInstance->outputKeyboard->setCallbacks(new KeyboardOutputCallbacks());
+	bleKeyboardInstance->outputKeyboard->setCallbacks(bleKeyboardInstance->callBack);
 
 	bleKeyboardInstance->hid->manufacturer()->setValue(bleKeyboardInstance->deviceManufacturer);
 
@@ -145,16 +141,17 @@ void Hid2Ble::taskServer(void *pvParameter)
 
 	bleKeyboardInstance->hid->reportMap((uint8_t *)_hidReportDescriptor, sizeof(_hidReportDescriptor));
 	bleKeyboardInstance->hid->startServices();
-
+	bleKeyboardInstance->hid->setBatteryLevel(bleKeyboardInstance->batteryLevel);
 	bleKeyboardInstance->onStarted(pServer);
 
 	BLEAdvertising *pAdvertising = pServer->getAdvertising();
 	pAdvertising->setAppearance(HID_KEYBOARD);
 	pAdvertising->addServiceUUID(bleKeyboardInstance->hid->hidService()->getUUID());
-	pAdvertising->start();
-	bleKeyboardInstance->hid->setBatteryLevel(bleKeyboardInstance->batteryLevel);
+	pAdvertising->addServiceUUID(bleKeyboardInstance->hid->deviceInfo()->getUUID());
+	pAdvertising->addServiceUUID(bleKeyboardInstance->hid->batteryService()->getUUID());
 
-	ESP_LOGD(LOG_TAG, "Advertising started!");
+	pAdvertising->start();
+
 	vTaskDelay(portMAX_DELAY); //delay(portMAX_DELAY);
 }
 
@@ -164,5 +161,13 @@ void Hid2Ble::send2Ble(char *keys)
 	{
 		this->inputKeyboard->setValue((uint8_t *)keys, 8);
 		this->inputKeyboard->notify();
+	}
+}
+void Hid2Ble::sendMedia2Ble(char *keys)
+{
+	if (this->isConnected())
+	{
+		this->inputMediaKeys->setValue((uint8_t *)keys, 2);
+		this->inputMediaKeys->notify();
 	}
 }

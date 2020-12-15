@@ -11,8 +11,18 @@ class BleConnectionStatus : public BLEServerCallbacks
 {
 public:
   BleConnectionStatus(void);
+
+  /**
+   * 蓝牙连接状态
+   */
   bool connected = false;
+  /**
+   * 蓝牙连接回调函数
+   */
   void onConnect(BLEServer *pServer);
+  /**
+   * 蓝牙断开连接回调函数
+   */
   void onDisconnect(BLEServer *pServer);
   BLECharacteristic *inputKeyboard;
   BLECharacteristic *outputKeyboard;
